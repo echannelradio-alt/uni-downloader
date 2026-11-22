@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All-In-One Downloader</title>
+<style>
+  * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body {
+    margin: 0; padding: 20px; background: #0a0a0a; color: #f5f5f5;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  .card {
+    background: #141414; border: 1px solid #262626; border-radius: 16px;
+    padding: 20px; margin-top: 12px;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.3px; }
+  p.sub { margin: 0 0 18px; font-size: 13px; color: #8e8e8e; }
+  .input-wrap { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1; background: #0d0d0d; border: 1px solid #2e2e2e; color: #fff;
+    padding: 13px 14px; border-radius: 10px; font-size: 14px; outline: none;
+  }
+  input[type="text"]:focus { border-color: #ffffff; }
+  button.paste {
+    background: #222; color: #fff; border: 1px solid #333;
+    border-radius: 10px; padding: 0 14px; font-size: 13px; cursor: pointer;
+  }
+  .badge {
+    display: inline-block; margin-top: 14px; padding: 5px 12px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: #222; color: #aaa; border: 1px solid #333;
+  }
+  .badge.active { background: #ffffff; color: #0a0a0a; border-color: #ffffff; }
+  .options { margin-top: 18px; display: none; flex-direction: column; gap: 12px; }
+  .options.show { display: flex; }
+  label { font-size: 12px; color: #9a9a9a; display: block; margin-bottom: 6px; }
+  select {
+    width: 100%; background: #0d0d0d; color: #fff; border: 1px solid #2e2e2e;
+    padding: 12px; border-radius: 10px; font-size: 14px;
+  }
+  button.dl {
+    margin-top: 8px; width: 100%; padding: 14px; border: none;
+    border-radius: 10px; background: #ffffff; color: #0a0a0a;
+    font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+  button.dl:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { margin-top: 12px; font-size: 13px; color: #a3a3a3; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Universal Downloader</h1>
+    <p class="sub">Tempel link TikTok, Pinterest, IG, YouTube, FB, Threads, atau Spotify</p>
+
+    <div class="input-wrap">
+      <input id="urlInput" type="text" placeholder="Tempel URL di sini..." oninput="detectPlatform()" />
+      <button class="paste" onclick="pasteClipboard()">Tempel</button>
+    </div>
+
+    <div id="platformBadge" class="badge">Menunggu link...</div>
+
+    <div id="optionsBox" class="options">
+      <div>
+        <label for="formatSelect">Format File</label>
+        <select id="formatSelect" onchange="updateResolutions()"></select>
+      </div>
+      <div id="resWrap">
+        <label for="resSelect">Resolusi / Kualitas</label>
+        <select id="resSelect"></select>
+      </div>
+      <button id="dlBtn" class="dl" onclick="startDownload()">Download Sekarang</button>
+    </div>
+
+    <div id="statusText" class="status"></div>
+  </div>
+
+<script>
+  // Ganti URL di bawah ini dengan server API extractor milikmu (misal endpoint cobalt / yt-dlp API)
+  const API_ENDPOINT = "https://ISI-SERVER-EXTRACTOR-KAMU.COM/api";
+
+  const PLATFORMS = [
+    { name: "TikTok", keys: ["tiktok.com", "vt.tiktok.com", "vm.tiktok.com"], formats: ["MP4 (Video)", "MP3 (Audio)"] },
+    { name: "Pinterest", keys: ["pinterest.com", "pin.it"], formats: ["JPG / PNG (Gambar)", "MP4 (Video Pin)"] },
+    { name: "Instagram", keys: ["instagram.com"], formats: ["MP4 (Reels/Video)", "JPG (Foto)", "MP3 (Audio)"] },
+    { name: "YouTube", keys: ["youtube.com", "youtu.be"], formats: ["MP4 (Video)", "MP3 (Audio)", "M4A (Audio)"] },
+    { name: "Facebook", keys: ["facebook.com", "fb.watch"], formats: ["MP4 (Video)", "MP3 (Audio)"] },
+    { name: "Threads", keys: ["threads.net", "threads.com"], formats: ["MP4 (Video)", "JPG (Foto)"] },
+    { name: "Spotify", keys: ["open.spotify.com", "spotify.com"], formats: ["MP3 (Audio Metadata)"], note: "Spotify dilindungi DRM; server extractor harus memakai mode pencarian/matching audio." }
+  ];
+
+  let currentPlatform = null;
+
+  async function pasteClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById("urlInput").value = text;
+      detectPlatform();
+    } catch (e) {
+      document.getElementById("statusText").textContent = "Tempel manual di kolom input di atas.";
+    }
+  }
+
+  function detectPlatform() {
+    const raw = document.getElementById("urlInput").value.trim().toLowerCase();
+    const badge = document.getElementById("platformBadge");
+    const box = document.getElementById("optionsBox");
+    const status = document.getElementById("statusText");
+
+    if (!raw) {
+      currentPlatform = null;
+      badge.textContent = "Menunggu link...";
+      badge.classList.remove("active");
+      box.classList.remove("show");
+      status.textContent = "";
+      return;
+    }
+
+    const found = PLATFORMS.find(p => p.keys.some(k => raw.includes(k)));
+    if (!found) {
+      currentPlatform = null;
+      badge.textContent = "Platform tidak dikenali";
+      badge.classList.remove("active");
+      box.classList.remove("show");
+      status.textContent = "Pastikan link berasal dari TikTok, Pinterest, IG, YouTube, FB, Threads, atau Spotify.";
+      return;
+    }
+
+    currentPlatform = found;
+    badge.textContent = "Terdeteksi: " + found.name;
+    badge.classList.add("active");
+    box.classList.add("show");
+    status.textContent = found.note || "";
+
+    const formatSelect = document.getElementById("formatSelect");
+    formatSelect.innerHTML = found.formats.map(f => `<option value="${f}">${f}</option>`).join("");
+    updateResolutions();
+  }
+
+  function updateResolutions() {
+    const fmt = document.getElementById("formatSelect").value;
+    const resSelect = document.getElementById("resSelect");
+    if (fmt.includes("MP4")) {
+      resSelect.innerHTML = `
+        <option value="1080">1080p (Full HD)</option>
+        <option value="720" selected>720p (HD)</option>
+        <option value="480">480p (Hemat Kuota)</option>
+      `;
+    } else if (fmt.includes("MP3") || fmt.includes("M4A")) {
+      resSelect.innerHTML = `
+        <option value="320" selected>320 kbps (Tinggi)</option>
+        <option value="128">128 kbps (Standar)</option>
+      `;
+    } else {
+      resSelect.innerHTML = `<option value="original" selected>Kualitas Asli (Original)</option>`;
+    }
+  }
+
+  async function startDownload() {
+    const url = document.getElementById("urlInput").value.trim();
+    const format = document.getElementById("formatSelect").value;
+    const quality = document.getElementById("resSelect").value;
+    const btn = document.getElementById("dlBtn");
+    const status = document.getElementById("statusText");
+
+    if (!url || !currentPlatform) return;
+
+    btn.disabled = true;
+    status.textContent = `Memproses link ${currentPlatform.name} (${format} - ${quality})...`;
+
+    try {
+      const res = await fetch(API_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ url, platform: currentPlatform.name.toLowerCase(), format, quality })
+      });
+      const data = await res.json();
+
+      if (!data.downloadUrl) throw new Error(data.error || "Link unduhan tidak ditemukan.");
+
+      const ext = format.includes("MP3") ? "mp3" : format.includes("M4A") ? "m4a" : format.includes("JPG") ? "jpg" : "mp4";
+      const fileName = `${currentPlatform.name.toLowerCase()}_${Date.now()}.${ext}`;
+
+      if (window.AndroidDownloader) {
+        window.AndroidDownloader.downloadFile(data.downloadUrl, fileName);
+        status.textContent = "Unduhan dikirim ke Download Manager Android!";
+      } else {
+        window.open(data.downloadUrl, "_blank");
+        status.textContent = "Membuka file unduhan...";
+      }
+    } catch (err) {
+      status.textContent = "Gagal memproses: " + err.message + " (Pastikan API_ENDPOINT sudah diisi server extractor yang aktif).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
