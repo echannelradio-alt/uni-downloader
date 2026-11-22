@@ -74,6 +74,7 @@
       color: #d4d4d8;
       min-height: 18px;
       line-height: 1.4;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -107,8 +108,8 @@
   </div>
 
   <script>
-    // Ganti URL ini dengan situs downloader web yang ingin kamu buka saat tombol ditekan
-    const API_ENDPOINT = "https://cobalt.girlskissing.top";
+    // Ganti URL ini jika ingin mengarah ke situs web tujuan lain
+    const WEB_TARGET_URL = "https://cobalt.girlskissing.top";
 
     const urlInput = document.getElementById("urlInput");
     const badge = document.getElementById("platformBadge");
@@ -152,10 +153,13 @@
       }
       const fmt = document.getElementById("formatSelect").value;
       const qual = document.getElementById("qualitySelect").value;
-      statusMsg.textContent = `Membuka layanan (${fmt.toUpperCase()} · ${qual})...`;
 
-      // Membuka halaman web downloader agar tidak gagal fetch tanpa API endpoint
-      window.open(FALLBACK_WEB_URL, "_blank");
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(targetUrl).catch(() => {});
+      }
+
+      statusMsg.textContent = `Menyiapkan (${fmt.toUpperCase()} · ${qual}) & membuka halaman...`;
+      window.location.href = WEB_TARGET_URL;
     }
   </script>
 </body>
